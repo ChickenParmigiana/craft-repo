@@ -14,7 +14,7 @@ exec > >(tee -a ${LOGFILE}) 2>&1
 sudo xbps-install -Syu
 sudo xbps-install -y git curl btrfs-progs gparted zsh flatpak xbps-src \
     pipewire pipewire-pulse kdeconnect vim keyd flatseal rstudio qemu docker \
-    libvirt virt-manager zramctl texlive-full nodejs npm
+    libvirt virt-manager zramctl texlive-full nodejs npm zathura sioyek
 
 # Enable non-free repositories for additional software and drivers
 echo "Enabling non-free repositories..."
@@ -152,40 +152,40 @@ capslock = overload(meta, esc)
 EOF
 sudo systemctl restart keyd
 
+# Install Spotify and Spicetify
+echo "Installing Spotify and Spicetify..."
+flatpak install flathub com.spotify.Client -y
+curl -fsSL https://raw.githubusercontent.com/khanhas/spicetify-cli/master/install.sh | sh
+spicetify backup apply enable-devtool
+
+# Install Discord and BetterDiscord
+echo "Installing Discord and BetterDiscord..."
+flatpak install flathub com.discordapp.Discord -y
+curl -O https://raw.githubusercontent.com/bb010g/betterdiscordctl/master/betterdiscordctl
+chmod +x betterdiscordctl
+sudo mv betterdiscordctl /usr/local/bin/
+betterdiscordctl install -f flatpak
+
 # QEMU and GPU Passthrough Setup
 echo "Setting up QEMU and GPU Passthrough for OSX Sonoma..."
 sudo xbps-install -y qemu libvirt virt-manager
 sudo systemctl enable --now libvirtd
 
+# Docker Setup for Docker-OSX (MacOS Sonoma)
+echo "Installing Docker-OSX for running MacOS Sonoma..."
+sudo docker pull sickcodes/docker-osx:latest
+sudo docker run --device /dev/kvm -e RAM=12 -e SMP=4 -e CPUS=4 -e CUSTOM_RES=3440x1440 -e GPU_ARGS="-vga none -nographic" \
+    -v /tmp/.X11-unix:/tmp/.X11-unix -v ~/docker-osx/mac_hdd_ng.img:/mnt/my-disk \
+    -p 50922:10022 -p 50923:50923 -p 50924:50924 \
+    -e "DISPLAY=${DISPLAY:-:0.0}" \
+    --name docker-osx \
+    -e USE_QEMU=1 \
+    sickcodes/docker-osx:latest
+
 # Enable IOMMU in GRUB
 echo "Configuring GRUB for IOMMU..."
 sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash iommu=pt amd_iommu=on"/' /etc/default/grub
 sudo update-grub
-echo "Please reboot your system to apply IOMMU settings, then re-run this script to complete the setup."
-exit 0
-
-# Docker Setup for Docker-OSX (MacOS Sonoma)
-echo "Installing Docker-OSX for running MacOS Sonoma..."
-sudo xbps-install -y docker
-sudo systemctl enable --now docker
-
-# Create a 200GB disk image for MacOS
-echo "Creating 200GB disk image for MacOS Sonoma..."
-mkdir -p ~/docker-osx
-qemu-img create -f qcow2 ~/docker-osx/mac_hdd_ng.img 200G
-
-# Set up GPU Passthrough with QEMU for MacOS Sonoma
-echo "Configuring QEMU for MacOS Sonoma with GPU passthrough..."
-cat <<EOL >> ~/.zshrc
-alias osx="qemu-system-x86_64 -enable-kvm -m 12G -cpu host,hv_time,kvm=off \
--smp 4,sockets=1,cores=4,threads=1 -device vfio-pci,host=XX:00.0,multifunction=on,x-vga=on \
--device vfio-pci,host=XX:00.1 -drive file=~/docker-osx/mac_hdd_ng.img,if=virtio \
--device ich9-usb-ehci1,id=usb -device ich9-usb-uhci1,masterbus=usb.0,firstport=0,multifunction=on \
--device ich9-usb-uhci2,masterbus=usb.0,firstport=2,multifunction=on -device ich9-usb-uhci3,masterbus=usb.0,firstport=4,multifunction=on \
--device usb-mouse -device usb-kbd -device usb-storage,drive=mydrive -drive if=none,id=mydrive,file=~/docker-osx/shared.qcow2 \
--vga none -display gtk,gl=on -device vfio-pci,host=XXXX:XXXX,addr=0x5 \
--global VGA.edid=~/docker-osx/3440x1440.edid -monitor stdio -boot menu=on"
-EOL
 
 # Final message
-echo "Installation complete! Reboot your system to apply all changes. After reboot, run MacOS Sonoma using the command 'osx'."
+echo "Installation complete! Reboot your system to apply IOMMU settings and start using your setup."
