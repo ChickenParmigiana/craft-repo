@@ -13,13 +13,17 @@ exec > >(tee -a ${LOGFILE}) 2>&1
 # Update and install basic packages
 sudo xbps-install -Syu
 sudo xbps-install -y git curl btrfs-progs gparted zsh flatpak xbps-src \
-    pipewire pipewire-pulse kdeconnect vim keyd flatseal rstudio qemu docker \
-    libvirt virt-manager zramctl texlive-full nodejs npm zathura sioyek
+    kdeconnect vim keyd flatseal rstudio qemu docker libvirt virt-manager \
+    zramctl texlive-full nodejs npm zathura sioyek neovim obsidian pandoc
 
 # Enable non-free repositories for additional software and drivers
 echo "Enabling non-free repositories..."
 echo "repository=https://alpha.de.repo.voidlinux.org/current/nonfree" | sudo tee -a /etc/xbps.d/00-repository-main.conf
 sudo xbps-install -Syu
+
+# Install Zen Kernel and related packages
+echo "Installing Zen Kernel..."
+sudo xbps-install -y linux-zen linux-zen-headers
 
 # Install AMD graphics drivers and utilities
 echo "Installing AMD graphics drivers and utilities..."
@@ -34,15 +38,6 @@ sudo dracut -f
 cd ..
 rm -rf linux-firmware
 echo "AMD GPU firmware installed."
-
-# Set up Zsh and Powerlevel10k
-if [ "$SHELL" != "/bin/zsh" ]; then
-    sudo xbps-install -y zsh
-    chsh -s /bin/zsh
-    sudo xbps-install -y git
-    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ~/powerlevel10k
-    echo 'source ~/powerlevel10k/powerlevel10k.zsh-theme' >> ~/.zshrc
-fi
 
 # ZRAM setup
 echo "Setting up ZRAM..."
@@ -65,47 +60,25 @@ echo "Setting up Snapper for Btrfs snapshots..."
 sudo snapper -c root create-config /
 sudo snapper -c home create-config /home
 
-# Install and configure Neovim with LazyVim (if not done by Craft script)
-if ! command -v nvim &> /dev/null; then
-    echo "Installing Neovim and LazyVim..."
-    sudo xbps-install -y neovim
-    git clone https://github.com/LazyVim/starter ~/.config/nvim
+# Set up Zsh and Powerlevel10k
+if [ "$SHELL" != "/bin/zsh" ]; then
+    sudo xbps-install -y zsh
+    chsh -s /bin/zsh
+    sudo xbps-install -y git
+    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ~/powerlevel10k
+    echo 'source ~/powerlevel10k/powerlevel10k.zsh-theme' >> ~/.zshrc
 fi
+
+# Install and configure Neovim with LazyVim
+echo "Installing Neovim and LazyVim..."
+sudo xbps-install -y neovim
+git clone https://github.com/LazyVim/starter ~/.config/nvim
 
 # Enable Pipewire and Pipewire-Pulse services
 echo "Enabling Pipewire and Pipewire-Pulse services..."
 sudo ln -s /etc/sv/pipewire /var/service/
 sudo ln -s /etc/sv/pipewire-pulse /var/service/
-
-# Install EasyEffects for advanced audio management
-echo "Installing EasyEffects..."
 sudo xbps-install -y easyeffects
-
-# Install Obsidian via package (alternative to AppImage)
-echo "Installing Obsidian..."
-sudo xbps-install -y obsidian  # Replace with the correct package name if available
-
-# Install Pandoc and LaTeX template
-echo "Installing Pandoc and LaTeX template..."
-sudo xbps-install -y pandoc
-git clone https://github.com/Wandmalfarbe/pandoc-latex-template.git ~/pandoc-latex-template
-
-# Install Node.js, Gatsby CLI, and dependencies for Gatsby Theme Carbon
-echo "Installing Node.js, Gatsby CLI, and dependencies for Gatsby Theme Carbon..."
-sudo npm install -g gatsby-cli
-
-# Set up Gatsby with IBM Carbon Design starter
-echo "Setting up Gatsby with IBM Carbon Design starter..."
-mkdir -p ~/gatsby-sites
-cd ~/gatsby-sites
-gatsby new my-gatsby-site https://github.com/carbon-design-system/gatsby-theme-carbon
-
-# Navigate to the site directory and install necessary packages
-cd my-gatsby-site
-npm install
-
-# Build the Gatsby site to verify everything is working
-gatsby build
 
 # Install and set up Screen-Pipe
 echo "Installing Screen-Pipe..."
