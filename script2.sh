@@ -1,15 +1,25 @@
 #!/bin/bash
 
+# Ensure the script is running as root
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Please run this script as root."
+  exit 1
+fi
+
+# Create a log file for output
+LOGFILE=~/void_install_log.txt
+exec > >(tee -a ${LOGFILE}) 2>&1
+
 # Update and install basic packages
 sudo xbps-install -Syu
+sudo xbps-install -y git curl btrfs-progs gparted zsh flatpak xbps-src \
+    pipewire pipewire-pulse kdeconnect vim keyd flatseal rstudio qemu docker \
+    libvirt virt-manager zramctl texlive-full nodejs npm
 
 # Enable non-free repositories for additional software and drivers
 echo "Enabling non-free repositories..."
 echo "repository=https://alpha.de.repo.voidlinux.org/current/nonfree" | sudo tee -a /etc/xbps.d/00-repository-main.conf
 sudo xbps-install -Syu
-
-# Install essential tools
-sudo xbps-install -y flatpak xbps-src pipewire pipewire-pulse kdeconnect vim keyd flatseal rstudio
 
 # Install AMD graphics drivers and utilities
 echo "Installing AMD graphics drivers and utilities..."
@@ -36,7 +46,6 @@ fi
 
 # ZRAM setup
 echo "Setting up ZRAM..."
-sudo xbps-install -y zramctl
 echo "zram" | sudo tee -a /etc/modules-load.d/zram.conf
 echo "options zram num_devices=1" | sudo tee -a /etc/modprobe.d/zram.conf
 
@@ -76,10 +85,6 @@ sudo xbps-install -y easyeffects
 echo "Installing Obsidian..."
 sudo xbps-install -y obsidian  # Replace with the correct package name if available
 
-# Install full LaTeX suite (TeX Live)
-echo "Installing full LaTeX suite (TeX Live)..."
-sudo xbps-install -y texlive-full
-
 # Install Pandoc and LaTeX template
 echo "Installing Pandoc and LaTeX template..."
 sudo xbps-install -y pandoc
@@ -87,7 +92,6 @@ git clone https://github.com/Wandmalfarbe/pandoc-latex-template.git ~/pandoc-lat
 
 # Install Node.js, Gatsby CLI, and dependencies for Gatsby Theme Carbon
 echo "Installing Node.js, Gatsby CLI, and dependencies for Gatsby Theme Carbon..."
-sudo xbps-install -y nodejs npm
 sudo npm install -g gatsby-cli
 
 # Set up Gatsby with IBM Carbon Design starter
@@ -148,5 +152,40 @@ capslock = overload(meta, esc)
 EOF
 sudo systemctl restart keyd
 
+# QEMU and GPU Passthrough Setup
+echo "Setting up QEMU and GPU Passthrough for OSX Sonoma..."
+sudo xbps-install -y qemu libvirt virt-manager
+sudo systemctl enable --now libvirtd
+
+# Enable IOMMU in GRUB
+echo "Configuring GRUB for IOMMU..."
+sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash iommu=pt amd_iommu=on"/' /etc/default/grub
+sudo update-grub
+echo "Please reboot your system to apply IOMMU settings, then re-run this script to complete the setup."
+exit 0
+
+# Docker Setup for Docker-OSX (MacOS Sonoma)
+echo "Installing Docker-OSX for running MacOS Sonoma..."
+sudo xbps-install -y docker
+sudo systemctl enable --now docker
+
+# Create a 200GB disk image for MacOS
+echo "Creating 200GB disk image for MacOS Sonoma..."
+mkdir -p ~/docker-osx
+qemu-img create -f qcow2 ~/docker-osx/mac_hdd_ng.img 200G
+
+# Set up GPU Passthrough with QEMU for MacOS Sonoma
+echo "Configuring QEMU for MacOS Sonoma with GPU passthrough..."
+cat <<EOL >> ~/.zshrc
+alias osx="qemu-system-x86_64 -enable-kvm -m 12G -cpu host,hv_time,kvm=off \
+-smp 4,sockets=1,cores=4,threads=1 -device vfio-pci,host=XX:00.0,multifunction=on,x-vga=on \
+-device vfio-pci,host=XX:00.1 -drive file=~/docker-osx/mac_hdd_ng.img,if=virtio \
+-device ich9-usb-ehci1,id=usb -device ich9-usb-uhci1,masterbus=usb.0,firstport=0,multifunction=on \
+-device ich9-usb-uhci2,masterbus=usb.0,firstport=2,multifunction=on -device ich9-usb-uhci3,masterbus=usb.0,firstport=4,multifunction=on \
+-device usb-mouse -device usb-kbd -device usb-storage,drive=mydrive -drive if=none,id=mydrive,file=~/docker-osx/shared.qcow2 \
+-vga none -display gtk,gl=on -device vfio-pci,host=XXXX:XXXX,addr=0x5 \
+-global VGA.edid=~/docker-osx/3440x1440.edid -monitor stdio -boot menu=on"
+EOL
+
 # Final message
-echo "Installation complete! Reboot your system to apply all changes."
+echo "Installation complete! Reboot your system to apply all changes. After reboot, run MacOS Sonoma using the command 'osx'."
